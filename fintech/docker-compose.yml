@@ -1,0 +1,35 @@
+services:
+  postgres_db:
+    image: postgres:16
+    container_name: postgres_fintech
+    networks:
+      - fintech_net
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: fintech_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data_csv
+      - postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_fintech
+    networks:
+      - fintech_net
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres_db
+
+networks:
+  fintech_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
