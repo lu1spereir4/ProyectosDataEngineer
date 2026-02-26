@@ -22,13 +22,6 @@ Se detectó que 7 de los 693 comercios únicos presentaban categorías inconsist
 
 Solución: Se aplicó DISTINCT ON (merchant_name) en la etapa de carga para forzar una relación 1:1. Esto evitó la creación de registros fantasma en la tabla de hechos y garantizó la integridad referencial.
 
-3. Benchmarks de Performance
-Se validó la eficiencia del modelo comparando el almacenamiento de índices contra una tabla plana (raw):
-| Índice | Tipo de Dato | Tamaño Físico |
-| :--- | :--- | :--- |
-| idx_fct_merchant_sk | INTEGER | 9,064 kB |
-| idx_raw_merchant_clean | TEXT | 9,312 kB |
-
 Insight: El uso de llaves subrogadas enteras redujo el tamaño del índice en un 2.7%, optimizando el uso de la Buffer Cache de Postgres para los 32GB de RAM disponibles.
 
 🚀 Setup & Stack
@@ -43,3 +36,30 @@ Ubicar dataset en /data/ , descargar de https://www.kaggle.com/datasets/priyamch
 docker-compose up -d.
 
 Ejecutar scripts en orden: 01_init_landing.sql, 02_model_star_schema.sql, queries_finales.sql.
+
+Esta es una excelente forma de cerrar la documentación de tu proyecto. Como Ingeniero, no solo estás entregando código, sino que estás aportando un análisis crítico sobre la arquitectura y la eficiencia física de los datos.
+
+Aquí tienes una versión redactada con un tono más profesional y técnico para tu README.md, incorporando tus hallazgos sobre los índices y las reflexiones sobre el Modern Data Stack.
+
+🏁 Conclusiones y Próximos Pasos
+
+Rendimiento y Modelado
+Tras procesar 1.3M de registros, se observó que PostgreSQL mantiene un rendimiento excepcional tanto en estructuras desnormalizadas (tablas planas) como en el Star Schema propuesto. Si bien las diferencias en los tiempos de respuesta para este volumen de datos se midieron en centésimas de segundo, el modelo de estrella demostró una superioridad estructural clara:
+
+Eficiencia de Almacenamiento: Los índices sobre Surrogate Keys (enteros) resultaron físicamente más ligeros y densos que los índices sobre columnas de texto en la tabla raw, optimizando el uso de la memoria RAM.
+
+Escalabilidad: El modelado dimensional facilita la mantenibilidad y la integridad histórica mediante SCD Tipo 2, evitando la redundancia masiva de datos.
+
+Reflexión Técnica: ¿PostgreSQL o DuckDB?
+El cierre de este proyecto abre la puerta a nuevas interrogantes sobre la evolución de las herramientas analíticas:
+
+DuckDB + Parquet: Representan el siguiente paso para cargas de trabajo puramente OLAP. Aunque su velocidad de agregación es superior gracias al almacenamiento columnar, surge el desafío del manejo de SCD Tipo 2.
+
+Actualizaciones (SCD): PostgreSQL destaca por su manejo nativo de nulos, fechas de cierre y concurrencia. En contraste, el formato Parquet no está diseñado para actualizaciones de filas individuales, lo que requeriría estrategias de "overwrite" o el uso de tablas Delta.
+
+Roadmap Futuro
+Escalabilidad: Migrar las pruebas a datasets de mayor envergadura (>10M de filas) para estresar la arquitectura.
+
+Optimización Profunda: Profundizar en el uso de EXPLAIN ANALYZE para identificar cuellos de botella en planes de ejecución complejos.
+
+Stack Híbrido: Experimentar con DuckDB como motor de consulta sobre los archivos exportados desde el Star Schema de PostgreSQL.
