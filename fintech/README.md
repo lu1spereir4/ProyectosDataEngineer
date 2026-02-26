@@ -1,40 +1,45 @@
-💳 Fintech Data Warehouse: Credit Card Transactions Analysis
-Este proyecto implementa un Data Warehouse robusto utilizando un modelo de estrella (Kimball Star Schema) para analizar un dataset de 1.3M de transacciones de tarjetas de crédito. El objetivo es optimizar la detección de fraude y el análisis de series de tiempo.
+💳 Fintech Data Warehouse: Credit Card Fraud Analysis
+Este proyecto implementa un Data Warehouse basado en la metodología de Kimball para procesar 1.3M de transacciones. Se diseñó un modelo de estrella optimizado en PostgreSQL para análisis de series de tiempo y detección de anomalías.
 
 🏗️ Arquitectura del Modelo
-El modelo sigue la metodología de Ralph Kimball, optimizando el rendimiento de las consultas analíticas mediante la separación de hechos y dimensiones.
+El sistema separa las entidades de negocio en dimensiones para garantizar integridad y rapidez.
 
 Fact Table: fct_transactions (Granularidad: Transacción individual).
 
-Dimensions: dim_customer, dim_merchant, dim_date, dim_hour.
+Dimensions: dim_customer (SCD Type 2), dim_merchant (Deduplicada), dim_date (Data-Driven), dim_hour.
 
 🛠️ Decisiones de Ingeniería de Datos
-1. Implementación de SCD Tipo 2 (Slowly Changing Dimensions)
-Para la dimensión de clientes (dim_customer), se optó por una estrategia de SCD Tipo 2.
 
-Razón: Los atributos de los usuarios (dirección, trabajo, población de la ciudad) pueden cambiar con el tiempo. Para no perder la trazabilidad histórica de las transacciones bajo el contexto original, se añadieron las columnas is_current, start_date y end_date.
+1. Trazabilidad Histórica (SCD Tipo 2)
+Se implementó SCD Tipo 2 en la dimensión de clientes para capturar cambios en atributos como dirección o empleo sin alterar el pasado.
 
-Integridad: Durante la carga de la tabla de hechos, se utiliza el filtro is_current = TRUE para evitar la duplicación de transacciones (fan-out) al realizar los joins.
+Estrategia: Uso de flags is_current y ventanas temporales (start_date, end_date).
 
-2. Normalización y Manejo de Duplicados (Dimensión Merchant)
-Durante el perfilamiento de datos (Data Profiling), se identificó que el dataset original presentaba una relación Muchos a Muchos (M:N) implícita entre nombres de comercios y categorías/ubicaciones.
+Integridad: Se filtran joins por vigencia para evitar la duplicación de hechos (fan-out).
 
-Problema: Un mismo comercio aparecía con múltiples categorías o coordenadas ligeramente distintas, lo que generaba duplicados en la dimensión y, por consecuencia, en la tabla de hechos.
+2. Normalización de Comercios (Handling M:N)
+Se detectó que 7 de los 693 comercios únicos presentaban categorías inconsistentes.
 
-Solución: Se aplicó una técnica de Data Cleansing utilizando la cláusula DISTINCT ON (merchant_name) de PostgreSQL. Esto garantiza una relación 1:1 entre el nombre del comercio y su ID único (merchant_sk), eliminando el ruido de los atributos inconsistentes y asegurando la integridad referencial del modelo.
+Solución: Se aplicó DISTINCT ON (merchant_name) en la etapa de carga para forzar una relación 1:1. Esto evitó la creación de registros fantasma en la tabla de hechos y garantizó la integridad referencial.
 
-🚀 Stack Tecnológico
-Base de Datos: PostgreSQL (Engine).
+3. Benchmarks de Performance
+Se validó la eficiencia del modelo comparando el almacenamiento de índices contra una tabla plana (raw):
+| Índice | Tipo de Dato | Tamaño Físico |
+| :--- | :--- | :--- |
+| idx_fct_merchant_sk | INTEGER | 9,064 kB |
+| idx_raw_merchant_clean | TEXT | 9,312 kB |
 
-Infraestructura: Docker & Docker-Compose para despliegue de base de datos y pgAdmin.
+Insight: El uso de llaves subrogadas enteras redujo el tamaño del índice en un 2.7%, optimizando el uso de la Buffer Cache de Postgres para los 32GB de RAM disponibles.
 
-Volumen de Datos: 1,296,675 registros procesados.
+🚀 Setup & Stack
+Stack: PostgreSQL, Docker, Docker-Compose.
 
-📥 Ingestión de Datos
-El archivo fuente credit_card_transactions.csv está excluido del repositorio debido a su tamaño (~350MB).
+Volumen: 1,296,675 registros.
 
-Descargue el dataset desde .
+Setup:
 
-Ubique el archivo en la carpeta /data/.
+Ubicar dataset en /data/ , descargar de https://www.kaggle.com/datasets/priyamchoksi/credit-card-transactions-dataset y extraer el csv
 
-Ejecute docker-compose up -d para levantar el entorno e inicie los scripts SQL en el orden numérico establecido.
+docker-compose up -d.
+
+Ejecutar scripts en orden: 01_init_landing.sql, 02_model_star_schema.sql, queries_finales.sql.
