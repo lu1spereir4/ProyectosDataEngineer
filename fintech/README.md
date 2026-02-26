@@ -1,65 +1,67 @@
-💳 Fintech Data Warehouse: Credit Card Fraud Analysis
-Este proyecto implementa un Data Warehouse basado en la metodología de Kimball para procesar 1.3M de transacciones. Se diseñó un modelo de estrella optimizado en PostgreSQL para análisis de series de tiempo y detección de anomalías.
+# Fintech Data Warehouse — Credit Card Fraud Analysis
 
-🏗️ Arquitectura del Modelo
-El sistema separa las entidades de negocio en dimensiones para garantizar integridad y rapidez.
+Data Warehouse implementado en **PostgreSQL** siguiendo la metodología **Kimball** para analizar **1.3M** de transacciones de tarjetas y habilitar análisis de series de tiempo y detección de anomalías/fraude.
 
-Fact Table: fct_transactions (Granularidad: Transacción individual).
+- **Volumen:** 1,296,675 transacciones  
+- **Enfoque:** Star Schema (OLAP-friendly) + trazabilidad histórica (SCD2)  
+- **Stack:** PostgreSQL + Docker + Docker Compose  
 
-Dimensions: dim_customer (SCD Type 2), dim_merchant (Deduplicada), dim_date (Data-Driven), dim_hour.
+---
 
-🛠️ Decisiones de Ingeniería de Datos
+## Modelo Dimensional (Kimball)
 
-1. Trazabilidad Histórica (SCD Tipo 2)
-Se implementó SCD Tipo 2 en la dimensión de clientes para capturar cambios en atributos como dirección o empleo sin alterar el pasado.
+El DW separa entidades de negocio en **dimensiones** y consolida métricas en una **tabla de hechos**, mejorando performance analítica e integridad.
 
-Estrategia: Uso de flags is_current y ventanas temporales (start_date, end_date).
+### Fact Table
+- **`fct_transactions`**  
+  **Grano:** 1 fila = 1 transacción (transacción individual)
 
-Integridad: Se filtran joins por vigencia para evitar la duplicación de hechos (fan-out).
+### Dimensions
+- **`dim_customer`** — *SCD Type 2* (histórico de cambios)
+- **`dim_merchant`** — deduplicada / normalizada (merchant único)
+- **`dim_date`** — data-driven (generada según el rango real del dataset)
+- **`dim_hour`** — dimensión horaria para análisis intradía
 
-2. Normalización de Comercios (Handling M:N)
-Se detectó que 7 de los 693 comercios únicos presentaban categorías inconsistentes.
+---
 
-Solución: Se aplicó DISTINCT ON (merchant_name) en la etapa de carga para forzar una relación 1:1. Esto evitó la creación de registros fantasma en la tabla de hechos y garantizó la integridad referencial.
+## 🧠 Decisiones de Ingeniería de Datos
 
-Insight: El uso de llaves subrogadas enteras redujo el tamaño del índice en un 2.7%, optimizando el uso de la Buffer Cache de Postgres para los 32GB de RAM disponibles.
+### 1) Trazabilidad histórica con SCD Type 2 (Customer)
+Se implementó **SCD Tipo 2** en `dim_customer` para capturar cambios en atributos (p. ej. dirección/empleo) sin reescribir el pasado.
 
-🚀 Setup & Stack
-Stack: PostgreSQL, Docker, Docker-Compose.
+**Estrategia**
+- Flags y vigencia temporal: `is_current`, `start_date`, `end_date`
+- Joins a dimensión filtrados por vigencia para evitar fan-out y duplicación de hechos
 
-Volumen: 1,296,675 registros.
+**Resultado**
+- Integridad histórica consistente + consultas reproducibles en el tiempo
 
-Setup:
+---
 
-Ubicar dataset en /data/ , descargar de https://www.kaggle.com/datasets/priyamchoksi/credit-card-transactions-dataset y extraer el csv
+### 2) Normalización de Comercios (control de inconsistencias)
+Durante el profiling se detectó que **7 de 693** comercios “únicos” presentaban **categorías inconsistentes** (mismo merchant_name con atributos distintos), lo que podía generar relaciones 1:N no deseadas en la carga.
 
-docker-compose up -d.
+**Solución**
+- Deduplicación determinística en staging usando `DISTINCT ON (merchant_name)` para forzar relación **1:1**
+- Prevención de “registros fantasma” en la fact table y mejora de la integridad referencial
 
-Ejecutar scripts en orden: 01_init_landing.sql, 02_model_star_schema.sql, queries_finales.sql.
+---
 
-Esta es una excelente forma de cerrar la documentación de tu proyecto. Como Ingeniero, no solo estás entregando código, sino que estás aportando un análisis crítico sobre la arquitectura y la eficiencia física de los datos.
+### 3) Optimización física: Surrogate Keys
+Se utilizaron **llaves subrogadas enteras** (SK) para dims y fact.
 
-Aquí tienes una versión redactada con un tono más profesional y técnico para tu README.md, incorporando tus hallazgos sobre los índices y las reflexiones sobre el Modern Data Stack.
+**Insight**
+- Los índices basados en enteros redujeron el tamaño relativo (~2.7% vs llaves textuales), favoreciendo el uso de **Buffer Cache** en Postgres (entorno con **32GB RAM**) y mejorando eficiencia de joins analíticos.
 
-🏁 Conclusiones y Próximos Pasos
+---
 
-Rendimiento y Modelado
-Tras procesar 1.3M de registros, se observó que PostgreSQL mantiene un rendimiento excepcional tanto en estructuras desnormalizadas (tablas planas) como en el Star Schema propuesto. Si bien las diferencias en los tiempos de respuesta para este volumen de datos se midieron en centésimas de segundo, el modelo de estrella demostró una superioridad estructural clara:
+## Setup
 
-Eficiencia de Almacenamiento: Los índices sobre Surrogate Keys (enteros) resultaron físicamente más ligeros y densos que los índices sobre columnas de texto en la tabla raw, optimizando el uso de la memoria RAM.
+### 1) Dataset
+Descargar desde Kaggle y ubicar el CSV en `./data/`:
 
-Escalabilidad: El modelado dimensional facilita la mantenibilidad y la integridad histórica mediante SCD Tipo 2, evitando la redundancia masiva de datos.
+- Fuente: https://www.kaggle.com/datasets/priyamchoksi/credit-card-transactions-dataset
 
-Reflexión Técnica: ¿PostgreSQL o DuckDB?
-El cierre de este proyecto abre la puerta a nuevas interrogantes sobre la evolución de las herramientas analíticas:
-
-DuckDB + Parquet: Representan el siguiente paso para cargas de trabajo puramente OLAP. Aunque su velocidad de agregación es superior gracias al almacenamiento columnar, surge el desafío del manejo de SCD Tipo 2.
-
-Actualizaciones (SCD): PostgreSQL destaca por su manejo nativo de nulos, fechas de cierre y concurrencia. En contraste, el formato Parquet no está diseñado para actualizaciones de filas individuales, lo que requeriría estrategias de "overwrite" o el uso de tablas Delta.
-
-Roadmap Futuro
-Escalabilidad: Migrar las pruebas a datasets de mayor envergadura (>10M de filas) para estresar la arquitectura.
-
-Optimización Profunda: Profundizar en el uso de EXPLAIN ANALYZE para identificar cuellos de botella en planes de ejecución complejos.
-
-Stack Híbrido: Experimentar con DuckDB como motor de consulta sobre los archivos exportados desde el Star Schema de PostgreSQL.
+### 2) Levantar PostgreSQL con Docker
+```bash
+docker-compose up -d
