@@ -34,7 +34,7 @@ Este portafolio documenta mi especializacion en **Data Engineering** como Ingeni
 
 ---
 
-## Proyectos
+## Proyectos hechos
 
 ### [Fintech — Credit Card Transactions DW](./fintech)
 **Stack:** PostgreSQL, Star Schema, Window Functions, SQL avanzado
